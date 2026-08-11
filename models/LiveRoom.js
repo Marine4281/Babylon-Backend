@@ -6,13 +6,24 @@ const liveRoomSchema = new mongoose.Schema(
     type: { type: String, enum: ["video", "voice"], required: true },
     title: { type: String, default: "", maxlength: 100 },
 
-    // Agora channel this room streams on — never exposed to clients directly,
-    // only via the Agora token payload returned from start/join
     channelName: { type: String, required: true, unique: true },
 
     status: { type: String, enum: ["live", "ended"], default: "live", index: true },
     viewerCount: { type: Number, default: 0, min: 0 },
     giftTotal: { type: Number, default: 0 },
+
+    recordingEnabled: { type: Boolean, default: false }, // creator's choice at go-live time
+    recording: {
+      agoraResourceId: { type: String, default: "" },
+      agoraSid: { type: String, default: "" },
+      recordingUid: { type: String, default: "" },
+      status: {
+        type: String,
+        enum: ["none", "recording", "stopping", "processing", "ready", "failed"],
+        default: "none",
+      },
+    },
+    replay: { type: mongoose.Schema.Types.ObjectId, ref: "Replay" }, // set once processing completes
 
     startedAt: { type: Date, default: Date.now },
     endedAt: { type: Date },
