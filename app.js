@@ -5,12 +5,6 @@ import cors from "cors";
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
-import menuRoutes from "./routes/menuRoutes.js";
-import orderRoutes from "./routes/orderRoutes.js";
-import receiptRoutes from "./routes/receiptRoutes.js";
-import shiftRoutes from "./routes/shiftRoutes.js";
-import voidRequestRoutes from "./routes/voidRequestRoutes.js";
-import revenueRoutes from "./routes/revenueRoutes.js";
 
 dotenv.config();
 
@@ -23,8 +17,9 @@ app.set("trust proxy", 1);
 
 /* CORS */
 const ALLOWED_ORIGINS = [
-  "https://resto-pos-frontend.vercel.app",
+  "https://babylon-frontend.vercel.app", // TODO: replace with your real deployed frontend URL
   "http://localhost:3000", // local dev
+  "http://localhost:5173", // vite default dev port
 ];
 
 app.use(
@@ -39,18 +34,12 @@ app.use(express.json());
 
 /* Health check */
 app.get("/", (req, res) => {
-  res.json({ status: "RPS backend running" });
+  res.json({ status: "Babylon backend running" });
 });
 
 /* =================================================
    ROUTES
 ================================================= */
 app.use("/api/auth", authRoutes);
-app.use("/api/menu", menuRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/receipts", receiptRoutes);
-app.use("/api/shifts", shiftRoutes);
-app.use("/api/void-requests", voidRequestRoutes);
-app.use("/api/revenue", revenueRoutes);
 
 export default app;
