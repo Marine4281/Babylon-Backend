@@ -163,3 +163,34 @@ export const toggleFollow = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const updateUsername = async (req, res) => {
+  try {
+    const { username } = req.body;
+
+    if (!username || !username.trim())
+      return res.status(400).json({ message: "Username is required" });
+
+    const clean = username
+      .trim()
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+
+    if (clean.length < 3)
+      return res.status(400).json({ message: "Username must be at least 3 characters" });
+
+    if (clean !== req.user.username) {
+      const taken = await User.findOne({ username: clean });
+      if (taken)
+        return res.status(400).json({ message: "That username is already taken" });
+    }
+
+    req.user.username = clean;
+    await req.user.save();
+
+    res.json({ message: "Username updated", username: req.user.username });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
