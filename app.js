@@ -5,6 +5,10 @@ import cors from "cors";
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
+import postRoutes from "./routes/postRoutes.js";
+import walletRoutes from "./routes/walletRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+
 
 dotenv.config();
 
@@ -41,5 +45,9 @@ app.get("/", (req, res) => {
    ROUTES
 ================================================= */
 app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/posts", postRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/users", userRoutes);
 
 export default app;
