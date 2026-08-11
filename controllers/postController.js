@@ -4,12 +4,36 @@ import Comment from "../models/Comment.js";
 
 const AUTHOR_FIELDS = "username fullName avatarUrl countryCode isVerified";
 
+// @desc    Upload post media (images and/or videos) to Cloudinary —
+//          call this first, then pass the returned media/mediaPublicIds
+//          into POST /api/posts
+// @route   POST /api/posts/upload-media
+// @access  Protected
+export const uploadPostMedia = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No media uploaded" });
+    }
+
+    const media = req.files.map((f) => ({
+      url: f.path, // Cloudinary secure URL
+      publicId: f.filename, // Cloudinary public_id (for later deletion)
+      resourceType: f.mimetype?.startsWith("video") ? "video" : "image",
+    }));
+
+    res.json({ message: "Media uploaded", media });
+  } catch (error) {
+    console.error("Upload post media error:", error.message);
+    res.status(500).json({ message: "Media upload failed" });
+  }
+};
+
 // @desc    Create a new post
 // @route   POST /api/posts
 // @access  Protected
 export const createPost = async (req, res) => {
   try {
-    const { caption, media } = req.body;
+    const { caption, media, mediaPublicIds } = req.body;
 
     if (!caption && (!media || media.length === 0)) {
       return res.status(400).json({ message: "Post needs a caption or media" });
@@ -19,6 +43,7 @@ export const createPost = async (req, res) => {
       author: req.user._id,
       caption: caption || "",
       media: media || [],
+      mediaPublicIds: mediaPublicIds || [],
     });
 
     const populated = await post.populate("author", AUTHOR_FIELDS);
@@ -50,7 +75,6 @@ export const getFeed = async (req, res) => {
 
     const postIds = posts.map((p) => p._id);
 
-    // Figure out which of these posts the current user liked/saved, in one query each
     const [savedRows, topGifts] = await Promise.all([
       Bookmark.find({ user: req.user._id, post: { $in: postIds } }).select("post").lean(),
       Comment.aggregate([
@@ -73,7 +97,7 @@ export const getFeed = async (req, res) => {
       isLiked: p.likes?.some((id) => String(id) === String(req.user._id)) || false,
       isSaved: savedSet.has(String(p._id)),
       topGiftComment: topGiftMap.get(String(p._id)) || null,
-      likes: undefined, // don't ship the full likes array to the client
+      likes: undefined,
     }));
 
     res.json({ page, limit, posts: shaped });
