@@ -3,6 +3,7 @@ import LiveRoom from "../models/LiveRoom.js";
 import Transaction from "../models/Transaction.js";
 import { getOrCreateWallet } from "./walletController.js";
 import { generateAgoraRtcToken } from "../utils/agoraToken.js";
+import { finalizeReplay } from "../utils/replayProcessing.js";
 
 export const HOST_FIELDS = "username fullName avatarUrl countryCode isVerified";
 const SPEAKER_FIELDS = "username fullName avatarUrl countryCode isVerified";
@@ -134,7 +135,9 @@ export const leaveLiveRoom = async (req, res) => {
   }
 };
 
-// @desc    End a live room — host only
+// @desc    End a live room — host only. If recording was on, stopping the
+//          Agora recording and building the Replay happens in the
+//          background (finalizeReplay) so the host doesn't have to wait.
 // @route   POST /api/live/:roomId/end
 // @access  Protected
 export const endLiveRoom = async (req, res) => {
@@ -150,6 +153,12 @@ export const endLiveRoom = async (req, res) => {
     await room.save();
 
     req.app.get("io").to(`live_${room._id}`).emit("live:ended", { roomId: room._id });
+
+    if (room.recordingEnabled && room.recording?.status === "recording") {
+      finalizeReplay(room, req.app.get("io")).catch((err) =>
+        console.error("Replay finalize error:", err.message)
+      );
+    }
 
     res.json({ message: "Live room ended", room });
   } catch (error) {
