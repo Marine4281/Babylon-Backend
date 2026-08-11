@@ -6,6 +6,7 @@ import http from "http";
 import { Server } from "socket.io";
 import LiveRoom from "./models/LiveRoom.js";
 import Conversation from "./models/Conversation.js";
+import { startReplayCleanupJob } from "./jobs/replayCleanup.js";
 
 dotenv.config();
 
@@ -107,6 +108,11 @@ io.on("connection", (socket) => {
     console.log("❌ Client disconnected:", socket.id);
   });
 });
+
+/* ========================================
+   🧹 SCHEDULED JOBS
+======================================== */
+startReplayCleanupJob();
 
 /* ========================================
    🚀 START SERVER
