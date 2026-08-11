@@ -13,7 +13,9 @@ const userSchema = new mongoose.Schema(
 
     bio: { type: String, default: "", maxlength: 200 },
     avatarUrl: { type: String, default: "" },
+    avatarPublicId: { type: String, default: "" },
     coverPhotoUrl: { type: String, default: "" },
+    coverPhotoPublicId: { type: String, default: "" },
     countryCode: { type: String, default: "" },
     isVerified: { type: Boolean, default: false },
 
