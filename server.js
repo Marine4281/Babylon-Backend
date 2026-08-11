@@ -25,7 +25,7 @@ const server = http.createServer(app);
    🔌 SOCKET.IO SETUP
 ======================================== */
 const ALLOWED_ORIGINS = [
-  "https://resto-pos-frontend.vercel.app",
+  "https://babylon-frontend.vercel.app",
   "http://localhost:3000", // local dev
 ];
 
@@ -41,8 +41,6 @@ app.set("io", io);
 
 /* ========================================
    🔗 SOCKET CONNECTION — ROOMS
-   Rooms let a screen subscribe only to what it needs, e.g. a
-   kitchen display joins "kitchen" instead of hearing every event.
 ======================================== */
 io.on("connection", (socket) => {
   console.log("🔌 New client connected:", socket.id);
