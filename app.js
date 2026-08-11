@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import conversationRoutes from "./routes/conversationRoutes.js";
 
 
 dotenv.config();
@@ -49,5 +50,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/conversations", conversationRoutes);
 
 export default app;
