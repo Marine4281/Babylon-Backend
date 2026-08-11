@@ -1,4 +1,4 @@
-import pkg from "agora-access-token";
+import pkg from "agora-token";
 const { RtcTokenBuilder, RtcRole } = pkg;
 
 // Generates a short-lived Agora RTC token for a given channel + user.
