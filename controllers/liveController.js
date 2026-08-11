@@ -1,57 +1,13 @@
 import mongoose from "mongoose";
-import { v4 as uuidv4 } from "uuid";
 import LiveRoom from "../models/LiveRoom.js";
 import Transaction from "../models/Transaction.js";
 import { getOrCreateWallet } from "./walletController.js";
 import { generateAgoraRtcToken } from "../utils/agoraToken.js";
 
-const HOST_FIELDS = "username fullName avatarUrl countryCode isVerified";
+export const HOST_FIELDS = "username fullName avatarUrl countryCode isVerified";
 
-// @desc    Go live — creates a video or voice room and returns an Agora
-//          publisher token for the host
-// @route   POST /api/live
-// @access  Protected
-export const startLiveRoom = async (req, res) => {
-  try {
-    const { type = "video", title = "" } = req.body;
-    if (!["video", "voice"].includes(type)) {
-      return res.status(400).json({ message: "Type must be 'video' or 'voice'" });
-    }
-
-    const existing = await LiveRoom.findOne({ host: req.user._id, status: "live" });
-    if (existing) {
-      return res.status(400).json({ message: "You already have an active live room", room: existing });
-    }
-
-    const channelName = `babylon_live_${uuidv4()}`;
-
-    const room = await LiveRoom.create({
-      host: req.user._id,
-      type,
-      title: title.trim(),
-      channelName,
-    });
-
-    const token = generateAgoraRtcToken(channelName, req.user._id.toString(), "publisher");
-    const populated = await room.populate("host", HOST_FIELDS);
-
-    res.status(201).json({
-      room: populated,
-      agora: {
-        appId: process.env.AGORA_APP_ID,
-        channelName,
-        token,
-        uid: req.user._id.toString(),
-        role: "publisher",
-      },
-    });
-  } catch (error) {
-    console.error("Start live room error:", error.message);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// @desc    Join a live room as a viewer — returns an Agora subscriber token
+// @desc    Join a live room as a viewer/listener — returns an Agora
+//          subscriber token. Works for both video and voice rooms.
 // @route   POST /api/live/:roomId/join
 // @access  Protected
 export const joinLiveRoom = async (req, res) => {
@@ -89,7 +45,7 @@ export const joinLiveRoom = async (req, res) => {
   }
 };
 
-// @desc    Leave a live room (viewer)
+// @desc    Leave a live room
 // @route   POST /api/live/:roomId/leave
 // @access  Protected
 export const leaveLiveRoom = async (req, res) => {
@@ -161,7 +117,7 @@ export const getLiveRooms = async (req, res) => {
   }
 };
 
-// @desc    Send a real-money gift during a live stream — debits sender,
+// @desc    Send a real-money gift during a live stream/room — debits sender,
 //          credits host, broadcasts to the room instantly via socket
 // @route   POST /api/live/:roomId/gift
 // @access  Protected
