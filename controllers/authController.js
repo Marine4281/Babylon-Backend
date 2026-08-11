@@ -8,13 +8,12 @@ const signToken = (user) =>
 
 const publicUser = (user, wallet) => ({
   _id: user._id,
-  uniqueId: user.uniqueId,
+  username: user.username,
   fullName: user.fullName,
   email: user.email,
   phone: user.phone,
   country: user.country,
   role: user.role,
-  badge: user.badge,
   hiddenSections: user.hiddenSections,
   wallet: {
     balance: wallet?.balance || 0,
@@ -23,12 +22,34 @@ const publicUser = (user, wallet) => ({
   },
 });
 
+// Derives a username from the first name only, e.g. "Melly Chebet" → "melly01"
+// Loops with a random 2-digit suffix until it finds one that's free.
+const generateUsername = async (fullName) => {
+  const firstName = fullName
+    .trim()
+    .split(/\s+/)[0]
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9]/g, "");                          // strip symbols
+
+  let candidate;
+  do {
+    const suffix = String(Math.floor(Math.random() * 100)).padStart(2, "0"); // 00–99
+    candidate = `${firstName}${suffix}`;
+  } while (await User.findOne({ username: candidate }));
+
+  return candidate;
+};
+
 export const register = async (req, res) => {
   try {
     const {
       fullName, email, gender, phone, phoneCountry,
       password, confirmPassword, agreedToTerms,
     } = req.body;
+
+    if (!fullName || !fullName.trim())
+      return res.status(400).json({ message: "Full name is required" });
 
     if (password !== confirmPassword)
       return res.status(400).json({ message: "Passwords do not match" });
@@ -61,8 +82,12 @@ export const register = async (req, res) => {
       ipCountry !== "Unknown" &&
       phoneCountry.toLowerCase() !== ipCountry.toLowerCase();
 
+    const username = await generateUsername(fullName);
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = await User.create({
+      username,
+      role: "user",
       fullName,
       email,
       gender,
@@ -98,7 +123,7 @@ export const login = async (req, res) => {
 
     const user = await User.findOne({
       $or: [{ email: value.toLowerCase() }, { phone: value }],
-    }).populate("badge", "name imageUrl hidden");
+    });
 
     if (!user) return res.status(400).json({ message: "Invalid login or password" });
     if (user.isBlocked) return res.status(403).json({ message: "Your account has been suspended." });
