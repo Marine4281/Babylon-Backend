@@ -21,6 +21,15 @@ const userSchema = new mongoose.Schema(
 
     followersCount: { type: Number, default: 0 },
     followingCount: { type: Number, default: 0 },
+
+    // ── added to support authController.js ──────────────────────
+    gender: { type: String, enum: ["male", "female", "prefer_not_to_say"] },
+    phoneCountry: { type: String, default: null },
+    country: { type: String, default: "Unknown" },
+    countryMismatch: { type: Boolean, default: false },
+    agreedToTerms: { type: Boolean, default: false },
+    isBlocked: { type: Boolean, default: false },
+    hiddenSections: { type: [String], default: [] },
   },
   { timestamps: true }
 );
