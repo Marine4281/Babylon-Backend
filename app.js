@@ -10,6 +10,9 @@ import walletRoutes from "./routes/walletRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import conversationRoutes from "./routes/conversationRoutes.js";
 import liveRoutes from "./routes/liveRoutes.js";
+import replayRoutes from "./routes/replayRoutes.js";
+import reelRoutes from "./routes/reelRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 
 dotenv.config();
 
@@ -46,11 +49,13 @@ app.get("/", (req, res) => {
    ROUTES
 ================================================= */
 app.use("/api/auth", authRoutes);
-app.use("/api/auth", authRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/live", liveRoutes);
+app.use("/api/replays", replayRoutes);
+app.use("/api/reels", reelRoutes);
+app.use("/api/reports", reportRoutes);
 
 export default app;
