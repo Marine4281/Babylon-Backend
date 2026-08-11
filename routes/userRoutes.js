@@ -1,5 +1,5 @@
 import express from "express";
-import { getProfile, updateProfile, toggleFollow, uploadAvatar, uploadCoverPhoto } from "../controllers/userController.js";
+import { getProfile, updateProfile, toggleFollow, uploadAvatar, uploadCoverPhoto, updateUsername } from "../controllers/userController.js";
 import { protect } from "../Middlewares/authMiddleware.js";
 import { uploadAvatar as uploadAvatarMiddleware, uploadCoverPhoto as uploadCoverPhotoMiddleware } from "../Config/cloudinary.js";
 
@@ -12,5 +12,6 @@ router.post("/me/avatar", uploadAvatarMiddleware.single("avatar"), uploadAvatar)
 router.post("/me/cover-photo", uploadCoverPhotoMiddleware.single("cover"), uploadCoverPhoto);
 router.get("/:username", getProfile);
 router.post("/:id/follow", toggleFollow);
+router.patch("/username", protect, updateUsername);
 
 export default router;
