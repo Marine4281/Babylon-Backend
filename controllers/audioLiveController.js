@@ -1,14 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
 import LiveRoom from "../models/LiveRoom.js";
 import { generateAgoraRtcToken } from "../utils/agoraToken.js";
+import { acquireRecordingResource, startCloudRecording, RECORDING_UID } from "../utils/agoraCloudRecording.js";
 import { HOST_FIELDS } from "./liveController.js";
 
-// @desc    Start a voice room — host is seeded as the first speaker
+// @desc    Start a voice room — host is seeded as the first speaker.
+//          Recording is off by default; pass recordingEnabled: true to opt in.
 // @route   POST /api/live/voice
 // @access  Protected
 export const startAudioLiveRoom = async (req, res) => {
   try {
-    const { title = "" } = req.body;
+    const { title = "", recordingEnabled = false } = req.body;
 
     const existing = await LiveRoom.findOne({ host: req.user._id, status: "live" });
     if (existing) {
@@ -23,7 +25,28 @@ export const startAudioLiveRoom = async (req, res) => {
       title: title.trim(),
       channelName,
       speakers: [req.user._id],
+      recordingEnabled: Boolean(recordingEnabled),
     });
+
+    if (room.recordingEnabled) {
+      try {
+        const resourceId = await acquireRecordingResource(channelName);
+        const recordingToken = generateAgoraRtcToken(channelName, RECORDING_UID, "subscriber");
+        const sid = await startCloudRecording(channelName, resourceId, recordingToken);
+
+        room.recording = {
+          agoraResourceId: resourceId,
+          agoraSid: sid,
+          recordingUid: RECORDING_UID,
+          status: "recording",
+        };
+        await room.save();
+      } catch (recordingError) {
+        console.error("Start cloud recording error:", recordingError.message);
+        room.recording.status = "failed";
+        await room.save();
+      }
+    }
 
     const token = generateAgoraRtcToken(channelName, req.user._id.toString(), "publisher");
     const populated = await room.populate("host", HOST_FIELDS);
