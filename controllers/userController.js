@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Follow from "../models/Follow.js";
 import Post from "../models/Post.js";
+import { cloudinary } from "../Config/cloudinary.js";
 
 const PROFILE_FIELDS =
   "username fullName bio avatarUrl coverPhotoUrl countryCode isVerified followersCount followingCount createdAt";
@@ -63,6 +64,60 @@ export const updateProfile = async (req, res) => {
   } catch (error) {
     console.error("Update profile error:", error.message);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// @desc    Upload/replace the logged-in user's avatar
+// @route   POST /api/users/me/avatar
+// @access  Protected
+export const uploadAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded" });
+    }
+
+    const existing = await User.findById(req.user._id).select("avatarPublicId");
+    if (existing?.avatarPublicId) {
+      await cloudinary.uploader.destroy(existing.avatarPublicId).catch(() => {});
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { avatarUrl: req.file.path, avatarPublicId: req.file.filename },
+      { new: true }
+    ).select(PROFILE_FIELDS);
+
+    res.json(user);
+  } catch (error) {
+    console.error("Upload avatar error:", error.message);
+    res.status(500).json({ message: "Avatar upload failed" });
+  }
+};
+
+// @desc    Upload/replace the logged-in user's cover photo
+// @route   POST /api/users/me/cover-photo
+// @access  Protected
+export const uploadCoverPhoto = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded" });
+    }
+
+    const existing = await User.findById(req.user._id).select("coverPhotoPublicId");
+    if (existing?.coverPhotoPublicId) {
+      await cloudinary.uploader.destroy(existing.coverPhotoPublicId).catch(() => {});
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { coverPhotoUrl: req.file.path, coverPhotoPublicId: req.file.filename },
+      { new: true }
+    ).select(PROFILE_FIELDS);
+
+    res.json(user);
+  } catch (error) {
+    console.error("Upload cover photo error:", error.message);
+    res.status(500).json({ message: "Cover photo upload failed" });
   }
 };
 
