@@ -1,177 +1,118 @@
-// controllers/authController.js
+import User from "../models/User.js";
+import Wallet from "../models/Wallet.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../models/User.js";
 
 const signToken = (user) =>
-  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "12h",
-  });
+  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-const publicUser = (user) => ({
-  id: user._id,
-  username: user.username,
+const publicUser = (user, wallet) => ({
+  _id: user._id,
+  uniqueId: user.uniqueId,
   fullName: user.fullName,
+  email: user.email,
+  phone: user.phone,
+  country: user.country,
   role: user.role,
-  email: user.email || null,
-  phone: user.phone || null,
+  badge: user.badge,
+  hiddenSections: user.hiddenSections,
+  wallet: {
+    balance: wallet?.balance || 0,
+    earnedToday: wallet?.earnedToday || 0,
+    totalWithdrawn: wallet?.totalWithdrawn || 0,
+  },
 });
 
-// @desc    Authenticate any user (customer, waiter, kitchen, accountant, admin...)
-//          by username, email, or phone — one login page for everyone
-// @route   POST /api/auth/login
-// @access  Public
+export const register = async (req, res) => {
+  try {
+    const {
+      fullName, email, gender, phone, phoneCountry,
+      password, confirmPassword, agreedToTerms,
+    } = req.body;
+
+    if (password !== confirmPassword)
+      return res.status(400).json({ message: "Passwords do not match" });
+
+    if (await User.findOne({ email }))
+      return res.status(400).json({ message: "Email already registered" });
+
+    if (await User.findOne({ phone }))
+      return res.status(400).json({ message: "Phone already registered" });
+
+    // ── IP country detection — unchanged ──────────────────────────
+    let ipCountry = "Unknown";
+    try {
+      const ip =
+        (req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+        req.socket?.remoteAddress ||
+        "";
+      const isPrivate = /^(::1|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+      if (!isPrivate && ip) {
+        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=country`);
+        const geoData = await geoRes.json();
+        if (geoData?.country) ipCountry = geoData.country;
+      }
+    } catch {
+      // geo lookup failed — non-blocking
+    }
+
+    const countryMismatch =
+      phoneCountry &&
+      ipCountry !== "Unknown" &&
+      phoneCountry.toLowerCase() !== ipCountry.toLowerCase();
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = await User.create({
+      fullName,
+      email,
+      gender,
+      phone,
+      phoneCountry: phoneCountry || null,
+      country: ipCountry,
+      countryMismatch: !!countryMismatch,
+      password: hashedPassword,
+      agreedToTerms,
+      isVerified: true, // no verification email — active right away
+    });
+
+    const wallet = await Wallet.create({ user: newUser._id, balance: 0 });
+
+    res.status(201).json({
+      token: signToken(newUser),
+      user: publicUser(newUser, wallet),
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+// Login with EITHER email or phone
 export const login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
-    if (!identifier || !password) {
-      return res.status(400).json({ message: "Enter your login and password" });
-    }
+    if (!identifier || !password)
+      return res.status(400).json({ message: "Enter your email/phone and password" });
 
-    const value = identifier.toLowerCase().trim();
+    const value = identifier.trim();
 
     const user = await User.findOne({
-      $or: [{ username: value }, { email: value }, { phone: identifier.trim() }],
-    });
+      $or: [{ email: value.toLowerCase() }, { phone: value }],
+    }).populate("badge", "name imageUrl hidden");
 
-    if (!user || !user.isActive) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    if (!user) return res.status(400).json({ message: "Invalid login or password" });
+    if (user.isBlocked) return res.status(403).json({ message: "Your account has been suspended." });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Invalid login or password" });
 
-    res.json({ token: signToken(user), user: publicUser(user) });
-  } catch (error) {
-    console.error("Login error:", error.message);
-    res.status(500).json({ message: "Server error" });
-  }
-};
+    const wallet = await Wallet.findOne({ user: user._id });
 
-// @desc    Check if a username or a contact (email/phone) is already taken —
-//          used for live validation while the person is typing
-// @route   GET /api/auth/check-availability?field=email&value=jane@mail.com
-// @access  Public
-export const checkAvailability = async (req, res) => {
-  try {
-    const { field, value } = req.query;
-
-    if (!field || !value || !["username", "email", "phone"].includes(field)) {
-      return res.status(400).json({ message: "Invalid check request" });
-    }
-
-    const clean = field === "phone" ? value.trim() : value.toLowerCase().trim();
-    const existing = await User.findOne({ [field]: clean }).select("_id");
-
-    res.json({ available: !existing });
-  } catch (error) {
-    console.error("Check availability error:", error.message);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// @desc    Self-registration for customers (phone OR email + username + password)
-// @route   POST /api/auth/register-customer
-// @access  Public
-export const registerCustomer = async (req, res) => {
-  try {
-    const { method, contact, username, password } = req.body;
-
-    if (!method || !contact || !username || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-    if (!["email", "phone"].includes(method)) {
-      return res.status(400).json({ message: "Choose email or phone" });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters" });
-    }
-
-    const cleanUsername = username.toLowerCase().trim();
-    const cleanContact = method === "email" ? contact.toLowerCase().trim() : contact.trim();
-
-    // Check username and contact separately so the error is specific
-    const usernameTaken = await User.findOne({ username: cleanUsername });
-    if (usernameTaken) {
-      return res.status(400).json({ message: "That username is already taken" });
-    }
-
-    const contactTaken = await User.findOne({ [method]: cleanContact });
-    if (contactTaken) {
-      return res.status(400).json({
-        message: method === "email" ? "This email is already registered" : "This phone number is already registered",
-      });
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      username: cleanUsername,
-      password: hashed,
-      fullName: cleanUsername, // no separate full-name field collected at signup
-      role: "customer",
-      [method]: cleanContact,
+    res.json({
+      token: signToken(user),
+      user: publicUser(user, wallet),
     });
-
-    res.status(201).json({ token: signToken(user), user: publicUser(user) });
-  } catch (error) {
-    console.error("Register customer error:", error.message);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// @desc    Create a new staff user (admin/manager only)
-// @route   POST /api/auth/register
-// @access  Protected — admin, manager
-export const createUser = async (req, res) => {
-  try {
-    const { username, password, fullName, role, email, phone } = req.body;
-
-    if (!username || !password || !fullName || !role) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
-    const existing = await User.findOne({ username: username.toLowerCase().trim() });
-    if (existing) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      username: username.toLowerCase().trim(),
-      password: hashed,
-      fullName,
-      role,
-      email: email?.toLowerCase().trim() || undefined,
-      phone: phone?.trim() || undefined,
-    });
-
-    res.status(201).json({
-      message: "User created successfully",
-      user: publicUser(user),
-    });
-  } catch (error) {
-    console.error("Create user error:", error.message);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// @desc    Get all active waiters
-// @route   GET /api/auth/waiters
-// @access  Protected
-export const getWaiters = async (req, res) => {
-  try {
-    const waiters = await User.find({ role: "waiter", isActive: true })
-      .select("fullName")
-      .sort({ fullName: 1 });
-
-    res.json(waiters.map((w) => ({ id: w._id, fullName: w.fullName })));
-  } catch (error) {
-    console.error("Failed to fetch waiters:", error.message);
-    res.status(500).json({ message: "Failed to fetch waiters" });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
 };
