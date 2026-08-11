@@ -5,6 +5,69 @@ import { getOrCreateWallet } from "./walletController.js";
 import { generateAgoraRtcToken } from "../utils/agoraToken.js";
 
 export const HOST_FIELDS = "username fullName avatarUrl countryCode isVerified";
+const SPEAKER_FIELDS = "username fullName avatarUrl countryCode isVerified";
+
+// Works out whether this user should get a publisher (can send audio/video)
+// or subscriber (receive-only) token for the current state of the room.
+const resolveRole = (room, userId) => {
+  if (room.type === "video") {
+    return String(room.host) === String(userId) ? "publisher" : "subscriber";
+  }
+  // voice room — host is always seeded into speakers on creation
+  const isSpeaker = room.speakers.some((id) => String(id) === String(userId));
+  return isSpeaker ? "publisher" : "subscriber";
+};
+
+// @desc    Get a single live room's details (no Agora token — use join or
+//          token/refresh for that)
+// @route   GET /api/live/:roomId
+// @access  Protected
+export const getLiveRoom = async (req, res) => {
+  try {
+    const room = await LiveRoom.findById(req.params.roomId)
+      .populate("host", HOST_FIELDS)
+      .populate("speakers", SPEAKER_FIELDS)
+      .lean();
+
+    if (!room) {
+      return res.status(404).json({ message: "Live room not found" });
+    }
+
+    res.json({ room });
+  } catch (error) {
+    console.error("Get live room error:", error.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// @desc    Reissue an Agora token for a room the user is already part of —
+//          Agora tokens expire after 1 hour, call this before/near expiry
+// @route   POST /api/live/:roomId/token/refresh
+// @access  Protected
+export const refreshLiveToken = async (req, res) => {
+  try {
+    const room = await LiveRoom.findById(req.params.roomId);
+    if (!room || room.status !== "live") {
+      return res.status(404).json({ message: "Live room not found or has ended" });
+    }
+
+    const role = resolveRole(room, req.user._id);
+    const token = generateAgoraRtcToken(room.channelName, req.user._id.toString(), role);
+
+    res.json({
+      agora: {
+        appId: process.env.AGORA_APP_ID,
+        channelName: room.channelName,
+        token,
+        uid: req.user._id.toString(),
+        role,
+      },
+    });
+  } catch (error) {
+    console.error("Refresh live token error:", error.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 // @desc    Join a live room as a viewer/listener — returns an Agora
 //          subscriber token. Works for both video and voice rooms.
